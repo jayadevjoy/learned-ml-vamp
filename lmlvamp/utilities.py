@@ -23,6 +23,11 @@ def uifft(x: tf.Tensor) -> tf.Tensor:
     return tf.signal.ifft(x) * fft_scale
 
 
+# Add AWGN to a complex signal
+def add_awgn(x: tf.Tensor, noise_var: tf.Tensor) -> tf.Tensor:
+    return complex_gaussian(tf.shape(x), mean=x, var=tf.cast(noise_var, tf.float32))
+
+
 # Generates a complex Gaussian tensor
 def complex_gaussian(shape: Union[Tuple[int, ...], tf.TensorShape], 
                      mean: Optional[tf.Tensor] = None, 

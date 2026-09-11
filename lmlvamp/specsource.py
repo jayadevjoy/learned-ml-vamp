@@ -1,10 +1,11 @@
 """
-Module for generating a source with a given PSD and a linear denoiser based on PSD in the frequency domain.
+Module for generating a source with a given PSD and a 
+linear denoiser based on PSD in the frequency domain.
 """
 
 import numpy as np
 import tensorflow as tf
-from typing import List, Optional
+from typing import Optional
 from .utilities import real_to_complex, ufft, uifft
 
 
@@ -41,9 +42,6 @@ class SpecSource(tf.Module):
         self.snr = snr if snr is not None else np.zeros(self.nsrc)
         if len(self.snr) != self.nsrc:
             raise ValueError(f"Length of snr must match number of source intervals: {self.nsrc}")
-
-        # FFT scaling to make IFFT unitary
-        self.fft_scale = tf.constant(np.sqrt(self.nfft), dtype=tf.complex64)
 
         # Construct the PSD
         self.psd = np.zeros((self.nfft,))
@@ -107,119 +105,68 @@ class SpecEstim(tf.keras.layers.Layer):
     Linear spectral denoiser using known or estimated PSD.
     """
 
-    def __init__(self,
-                 nfft: int = 512,
-                 intf_known: bool = True,
-                 intf_idx0: Optional[int] = None,
-                 intf_idx1: Optional[int] = None):
-        """
-        Parameters
-        ----------
-        nfft : int
-            FFT size.
-        intf_known : bool
-            If True, replace estimated values in known interferer region with ground truth.
-        intf_idx0 : int
-            Start index of interferer region.
-        intf_idx1 : int
-            End index of interferer region.
-        """
+    def __init__(self):
         super().__init__(name='SpecEstim')
-        self.nfft = nfft
-        self.intf_known = intf_known
-        self.intf_idx0 = intf_idx0
-        self.intf_idx1 = intf_idx1
-        self.fft_scale = tf.constant(np.sqrt(self.nfft), dtype=tf.complex64)
 
     def call(self,
-             r_mean: tf.Tensor,
-             x_var: tf.Tensor,
-             psd: tf.Tensor,
-             x_true: Optional[tf.Tensor] = None) -> tuple[tf.Tensor, tf.Tensor]:
+             z_0: tf.Tensor,
+             gamma_0: tf.Tensor,
+             S: tf.Tensor,
+             mu: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
         """
         Apply frequency-domain Wiener filtering using PSD.
 
         Parameters
         ----------
-        r_mean : tf.Tensor
-            Prior mean of time-domain signal.
-        x_var : tf.Tensor
-            Prior variance of signal (shared across all bins).
-        psd : tf.Tensor
-            Known or estimated power spectral density.
-        x_true : tf.Tensor (optional)
-            Ground-truth frequency-domain signal (used if interferer region is known).
+        z_0 : tf.Tensor, shape (nsamp, ntd), tf.complex64
+            Posterior mean of the input frequency-domain signal.
+        gamma_0 : tf.Tensor, shape (nsamp, 1), tf.float32
+            Posterior precision (inverse variance).
+        S : tf.Tensor, shape (nsamp, ntd), tf.float32
+            Prior variance of the input signal.
+        mu : tf.Tensor, shape (nsamp, ntd), tf.float32
+            Prior mean of the input signal.
 
         Returns
         -------
-        r_hat : tf.Tensor
-            Estimated time-domain signal (via IFFT).
-        x_var_post : tf.Tensor
-            Posterior variance per sample (averaged across frequency bins).
+        x_hat : tf.Tensor
+            Estimated frequency-domain signal.
+        gamma_1 : tf.Tensor
+            Posterior precision (inverse variance) after denoising.
         """
-        x_mean = ufft(r_mean)
-        gain = psd / (psd + x_var)
+        gain = S * gamma_0 / (S * gamma_0 + 1)
         gain_c = real_to_complex(gain)
-        x_hat = gain_c * x_mean
-        x_var_post = gain * x_var
 
-        if self.intf_known:
-            mask_1d = tf.concat([
-                tf.zeros(self.intf_idx0, dtype=tf.float32),
-                tf.ones(self.intf_idx1 - self.intf_idx0, dtype=tf.float32),
-                tf.zeros(self.nfft - self.intf_idx1, dtype=tf.float32)
-            ], axis=0)
-            mask = tf.broadcast_to(mask_1d, tf.shape(x_hat))
-            mask_c = tf.cast(mask, tf.complex64)
-
-            x_hat = x_hat * (1 - mask_c) + x_true * mask_c
-            x_var_post = x_var_post * (1 - mask)
-
-        r_hat = uifft(x_hat)
+        x_hat = mu + gain_c * (z_0 - mu)
+        x_var_post = gain / gamma_0
         x_var_post = tf.reduce_mean(x_var_post, axis=1, keepdims=True)
+        gamma_1 = 1.0 / x_var_post
 
-        self.x_hat = x_hat
-        self.x_var_post = x_var_post
-
-        return r_hat, x_var_post
+        return x_hat, gamma_1
 
     def est_init(self,
-                 psd: tf.Tensor,
-                 x_true: Optional[tf.Tensor] = None) -> tuple[tf.Tensor, tf.Tensor]:
+                 S: tf.Tensor,
+                 mu: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
         """
         Initialize estimates to zero signal with PSD as variance.
 
         Parameters
         ----------
-        psd : tf.Tensor
-            Power spectral density for each sample.
-        x_true : tf.Tensor (optional)
-            Ground-truth frequency-domain signal (used if interferer region is known).
+        S : tf.Tensor, shape (nsamp, ntd), tf.float32
+            Prior variance of the input signal.
+        mu : tf.Tensor, shape (nsamp, ntd), tf.float32
+            Prior mean of the input signal.
 
         Returns
         -------
-        r_hat : tf.Tensor
-            Zero-initialized time-domain estimate.
-        x_var_post : tf.Tensor
-            Posterior variance estimate per sample (scalar).
+        z_1 : tf.Tensor
+            Initialized time-domain estimate.
+        gamma_1 : tf.Tensor
+            Posterior precision (inverse variance per sample, scalar).
         """
-        x_hat = tf.zeros(psd.shape, dtype=tf.complex64)
-        x_var_post = psd
 
-        if self.intf_known:
-            mask_1d = tf.concat([
-                tf.zeros(self.intf_idx0, dtype=tf.float32),
-                tf.ones(self.intf_idx1 - self.intf_idx0, dtype=tf.float32),
-                tf.zeros(self.nfft - self.intf_idx1, dtype=tf.float32)
-            ], axis=0)
-            mask = tf.broadcast_to(mask_1d, tf.shape(x_hat))
-            mask_c = tf.cast(mask, dtype=tf.complex64)
+        z_1 = uifft(mu)
+        x_var_post = tf.reduce_mean(S, axis=1, keepdims=True)
+        gamma_1 = 1.0 / x_var_post
 
-            x_hat = x_hat * (1 - mask_c) + x_true * mask_c
-            x_var_post = x_var_post * (1 - mask)
-
-        r_hat = uifft(x_hat)
-        x_var_post = tf.reduce_mean(x_var_post, axis=1, keepdims=True)
-
-        self.x_hat = x_hat
-        return r_hat, x_var_post
+        return z_1, gamma_1

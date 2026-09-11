@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Import custom modules and components
-from nonlin import SatNL
-from specsource import SpecSource, SpecEstim
-from complex_utils import gaussian_loss, mse, quantizer, delta_backoff
-from learned_vamp import VampSatEst, OracleLinEst, LearnedVampEst
+from .nonlin import SatNL
+from .specsource import SpecSource, SpecEstim
+from .utilities import mse, quantizer, delta_backoff
+from .learned_vamp import VampSatEst, OracleLinEst, LearnedVampEst
 
 
 class VampSim:

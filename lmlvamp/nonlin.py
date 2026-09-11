@@ -6,7 +6,7 @@ import sionna as sn
 import numpy as np
 from typing import Optional
 import tensorflow as tf
-from complex_utils import real_to_complex
+from .utilities import real_to_complex
 
 class SatNL(tf.Module): 
     """

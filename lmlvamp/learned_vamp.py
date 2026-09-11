@@ -5,8 +5,8 @@ Implementation of the Learned VAMP algorithm for signal estimation with nonlinea
 import numpy as np
 import tensorflow as tf
 from typing import Optional
-from complex_utils import real_to_complex, mse
-from nonlin import SatNeuralEst, SatNL
+from .utilities import real_to_complex, mse, ufft, uifft
+from .nonlin import SatNeuralEst, SatNL
 
 
 class VampSatEst(tf.keras.Model):
@@ -94,9 +94,6 @@ class VampSatEst(tf.keras.Model):
         x_var : tf.Tensor
             Final posterior variance estimate.
         """
-        # Compute the FFT normalization constant for unitary FFT scaling
-        fft_scale = tf.constant(np.sqrt(self.nfft), dtype=tf.complex64)
-
         # Initial spectral denoising estimate
         r_hat0, x_var0 = self.spec_est.est_init(psd, x_true)
 
@@ -122,12 +119,12 @@ class VampSatEst(tf.keras.Model):
 
             # Compute loss
             if (i + 1) < self.niter and train:
-                x_hat = tf.signal.fft(r_hat1) / fft_scale
+                x_hat = ufft(r_hat1)
                 loss += mse(x_true[:, des_idx0:des_idx1], x_hat[:, des_idx0:des_idx1]) * (i + 1) / (self.niter * (self.niter - 1) / 2)
 
         if train:
             wt = 0.25
-            x_hat = tf.signal.fft(r_hat1) / fft_scale
+            x_hat = ufft(r_hat1)
             loss = wt * loss + (1 - wt) * mse(x_true[:, des_idx0:des_idx1], x_hat[:, des_idx0:des_idx1])
 
         return (r_hat1, x_var1, loss) if train else (r_hat1, x_var1)
@@ -196,7 +193,7 @@ class OracleLinEst(tf.keras.Model):
         nsamp, nfft = psd.shape
 
         # Construct the IFFT matrix (scaled unitary)
-        ifft_mat = self.fft_scale * tf.signal.ifft(tf.eye(nfft, dtype=tf.complex64))
+        ifft_mat = uifft(tf.eye(nfft, dtype=tf.complex64))
 
         # Compute noise covariance: q = ftd^2 * wvar0 + wvar1
         q = f**2 * self.var_wa + self.var_wb
@@ -223,7 +220,7 @@ class OracleLinEst(tf.keras.Model):
         x_hat = tf.squeeze(x_hat, axis=-1)      # (nsamp, nfft)
 
         # Convert back to time-domain: r_hat = IFFT(x̂)
-        r_hat = self.fft_scale * tf.signal.ifft(x_hat)
+        r_hat = uifft(x_hat)
 
         return r_hat
 

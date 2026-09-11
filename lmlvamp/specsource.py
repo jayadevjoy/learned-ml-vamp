@@ -5,7 +5,7 @@ Module for generating a source with a given PSD and a linear denoiser based on P
 import numpy as np
 import tensorflow as tf
 from typing import List, Optional
-from complex_utils import real_to_complex
+from .utilities import real_to_complex, ufft, uifft
 
 
 class SpecSource(tf.Module):
@@ -71,7 +71,7 @@ class SpecSource(tf.Module):
         x_re = self.psd_mag * tf.random.normal((self.nsamp, self.nfft), dtype=tf.float32)
         x_im = self.psd_mag * tf.random.normal((self.nsamp, self.nfft), dtype=tf.float32)
         x = tf.complex(x_re, x_im)
-        r = self.fft_scale * tf.signal.ifft(x)
+        r = uifft(x)
         return x, r
 
     def measure_snr(self, r: tf.Tensor, r_hat: tf.Tensor) -> np.ndarray:
@@ -90,8 +90,8 @@ class SpecSource(tf.Module):
         snr_est : np.ndarray
             Estimated SNR (in dB) for each source interval.
         """
-        x = tf.signal.fft(r) / self.fft_scale
-        x_hat = tf.signal.fft(r_hat) / self.fft_scale
+        x = ufft(r)
+        x_hat = ufft(r_hat)
 
         x, x_hat, psd = x.numpy(), x_hat.numpy(), self.psd.numpy()
         snr_est = np.zeros(self.nsrc)
@@ -157,7 +157,7 @@ class SpecEstim(tf.keras.layers.Layer):
         x_var_post : tf.Tensor
             Posterior variance per sample (averaged across frequency bins).
         """
-        x_mean = tf.signal.fft(r_mean) / self.fft_scale
+        x_mean = ufft(r_mean)
         gain = psd / (psd + x_var)
         gain_c = real_to_complex(gain)
         x_hat = gain_c * x_mean
@@ -175,7 +175,7 @@ class SpecEstim(tf.keras.layers.Layer):
             x_hat = x_hat * (1 - mask_c) + x_true * mask_c
             x_var_post = x_var_post * (1 - mask)
 
-        r_hat = self.fft_scale * tf.signal.ifft(x_hat)
+        r_hat = uifft(x_hat)
         x_var_post = tf.reduce_mean(x_var_post, axis=1, keepdims=True)
 
         self.x_hat = x_hat
@@ -218,7 +218,7 @@ class SpecEstim(tf.keras.layers.Layer):
             x_hat = x_hat * (1 - mask_c) + x_true * mask_c
             x_var_post = x_var_post * (1 - mask)
 
-        r_hat = self.fft_scale * tf.signal.ifft(x_hat)
+        r_hat = uifft(x_hat)
         x_var_post = tf.reduce_mean(x_var_post, axis=1, keepdims=True)
 
         self.x_hat = x_hat

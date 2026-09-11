@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Import custom modules and components
-from complex_utils import corr_cap, error_metric
-from vamp_sim import VampSim
+from .utilities import metrics
+from .vamp_sim import VampSim
 
 class AllGridSim:
 

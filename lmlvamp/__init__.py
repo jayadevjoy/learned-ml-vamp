@@ -10,11 +10,11 @@ from .utilities import (complex_gaussian,
                         quantizer,
                         delta_backoff)
 
-from .nonlin import SatNL, SatLinearEst, SatNeuralEst
-from .specsource import SpecSource, SpecEstim
-from .learned_vamp import VampSatEst, OracleLinEst
-from .vamp_sim import VampSim
-from .all_sim import AllGridSim
+from .nonlinear import SatNL, SatLinearEst, SatNeuralEst
+from .source import SpecSource, SpecEstim, SpecNeuralUpdate
+from .lmlvamp import VampSatEst, OracleLinEst
+from .channel_sim import VampSim
+from .metrics import AllGridSim
 
 __all__ = [# utilities
            "complex_gaussian",
@@ -30,6 +30,7 @@ __all__ = [# utilities
            "SatNL",
            "SatLinearEst",
            "SatNeuralEst",
+           "SpecNeuralUpdate",
            "SpecSource",
            "SpecEstim",
            "VampSatEst",

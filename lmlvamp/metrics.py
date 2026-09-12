@@ -9,7 +9,7 @@ import pandas as pd
 
 # Import custom modules and components
 from .utilities import metrics
-from .vamp_sim import VampSim
+from .channel_sim import VampSim
 
 class AllGridSim:
 

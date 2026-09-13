@@ -11,7 +11,7 @@ import pandas as pd
 # Import custom modules and components
 from .nonlinear import SatNL
 from .source import SpecSource, SpecEstim
-from .utilities import mse, quantizer, delta_backoff
+from .utilities import quantizer, delta_backoff, ufft, uifft
 from .lmlvamp import VampSatEst, OracleLinEst
 
 
@@ -60,7 +60,6 @@ class VampSim:
         self.intf_known = intf_known
         self.nitvamp = nitvamp
         self.quantize = quantize
-        self.fft_scale = tf.constant(np.sqrt(self.nfft), dtype=tf.complex64)
 
         if snr_interval is None:
             snr_interval = np.array([0, 100])
@@ -84,12 +83,11 @@ class VampSim:
         self.des_idx0, self.des_idx1 = snr_interval
 
         # Identifying the interferer band in the frequency domain
-        mask_1d = tf.concat([
-            tf.zeros(self.intf_idx0, dtype=tf.complex64),
-            tf.ones(self.intf_idx1 - self.intf_idx0, dtype=tf.complex64),
-            tf.zeros(self.nfft - self.intf_idx1, dtype=tf.complex64)
-        ], axis=0)
+        mask_1d = tf.concat([tf.zeros(self.intf_idx0, dtype=tf.float32),
+                             tf.ones(self.intf_idx1 - self.intf_idx0, dtype=tf.float32),
+                             tf.zeros(self.nfft - self.intf_idx1, dtype=tf.float32)], axis=0)
         self.mask = tf.broadcast_to(mask_1d, (self.nsamp, self.nfft))
+        self.mask_c = tf.cast(self.mask, dtype=tf.complex64)
 
         # Create spectral source model
         self.src = SpecSource(nfft=self.nfft, src_intervals=self.src_intervals, snr=self.snr_inr, nsamp=self.nsamp)
@@ -98,7 +96,7 @@ class VampSim:
         self.sat_nl = SatNL(noise0_db=0, noise1_db=-10, sat_db=40)
 
         # Create spectral estimator (input denoiser for VAMP)
-        self.spec_est = SpecEstim(nfft=self.nfft, intf_idx0=self.intf_idx0, intf_idx1=self.intf_idx1, intf_known=self.intf_known)
+        self.spec_est = SpecEstim(nfft=self.nfft)
 
         # Instantiate VAMP estimator using the spectral denoiser
         self.vamp_est = VampSatEst(niter=self.nitvamp, spec_est=self.spec_est, sat_nl=self.sat_nl)
@@ -142,6 +140,13 @@ class VampSim:
             # Generate input PSD replicated for each sample
             psd = tf.tile(self.src.psd[None, :], (self.nsamp, 1))
 
+            if self.intf_known:
+                S = psd * (1 - self.mask)
+                mu = x * self.mask_c
+            else:
+                S = psd
+                mu = tf.zeros(S.shape, dtype=tf.complex64)
+
             # If quantization is enabled, apply quantization to the received time-domain signal
             if self.quantize:
                 delta = delta_backoff(y)
@@ -149,9 +154,9 @@ class VampSim:
 
             with tf.GradientTape() as tape:
                 # Forward pass through VAMP
-                r_hat, x_var, loss = self.vamp_est(psd=psd, y_obs=y, x_true=x, train=True, des_idx0=self.des_idx0, des_idx1=self.des_idx1)
+                r_hat, loss = self.vamp_est(S=S, mu=mu, y_obs=y, x_true=x, train=True, des_idx0=self.des_idx0, des_idx1=self.des_idx1)
 
-            # Gaussian loss
+            # Loss
             self.loss_hist.append(loss.numpy())
 
             # Backpropagation and optimizer step
@@ -220,7 +225,16 @@ class VampSim:
         
         # Pass through nonlinear channel with saturation
         y, f = self.sat_nl(r)
+
+        # Generate input PSD replicated for each sample
         psd = tf.tile(self.src.psd[None, :], (self.nsamp, 1))
+
+        if self.intf_known:
+            S = psd * (1 - self.mask)
+            mu = x * self.mask_c
+        else:
+            S = psd
+            mu = tf.zeros(S.shape, dtype=tf.complex64)
 
         # If quantization is enabled, apply quantization to the received time-domain signal
         if self.quantize:
@@ -228,12 +242,14 @@ class VampSim:
             y = quantizer(y, delta)
 
         # Run VAMP
-        r_hat_vamp, x_var_vamp = self.vamp_est(psd=psd, y_obs=y, x_true=x, train=False)
+        r_hat_vamp = self.vamp_est(S=S, mu=mu, y_obs=y, x_true=x, train=False)
 
         # Get linear baseline estimate
         wvar = self.sat_nl.var_wa + self.sat_nl.var_wb
         y_var = tf.ones((self.nsamp, 1)) * wvar
-        r_hat_lin, x_var_lin = self.spec_est(y, y_var, psd, x)
+        y_freq = ufft(y)
+        x_hat_lin, _ = self.spec_est(y_freq, (1/y_var), S, mu)
+        r_hat_lin = uifft(x_hat_lin)
 
         # Get oracle linear estimate
         self.oracle = OracleLinEst(sat_nl=self.sat_nl, nfft=self.nfft)  

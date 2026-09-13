@@ -12,7 +12,7 @@ import pandas as pd
 from .nonlinear import SatNL
 from .source import SpecSource, SpecEstim
 from .utilities import quantizer, delta_backoff, ufft, uifft
-from .lmlvamp import VampSatEst, OracleLinEst
+from .vamp import VampSatEst, OracleLinEst
 
 
 class VampSim:
@@ -96,7 +96,7 @@ class VampSim:
         self.sat_nl = SatNL(noise0_db=0, noise1_db=-10, sat_db=40)
 
         # Create spectral estimator (input denoiser for VAMP)
-        self.spec_est = SpecEstim(nfft=self.nfft)
+        self.spec_est = SpecEstim()
 
         # Instantiate VAMP estimator using the spectral denoiser
         self.vamp_est = VampSatEst(niter=self.nitvamp, spec_est=self.spec_est, sat_nl=self.sat_nl)
@@ -242,7 +242,7 @@ class VampSim:
             y = quantizer(y, delta)
 
         # Run VAMP
-        r_hat_vamp = self.vamp_est(S=S, mu=mu, y_obs=y, x_true=x, train=False)
+        r_hat_vamp, _ = self.vamp_est(S=S, mu=mu, y_obs=y, x_true=x, train=False)
 
         # Get linear baseline estimate
         wvar = self.sat_nl.var_wa + self.sat_nl.var_wb

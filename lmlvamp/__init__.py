@@ -12,7 +12,7 @@ from .utilities import (complex_gaussian,
 
 from .nonlinear import SatNL, SatLinearEst, SatNeuralEst
 from .source import SpecSource, SpecEstim, SpecNeuralUpdate
-from .lmlvamp import VampSatEst, OracleLinEst
+from .vamp import VampSatEst, OracleLinEst
 from .channel_sim import VampSim
 from .metrics_sim import AllGridSim
 

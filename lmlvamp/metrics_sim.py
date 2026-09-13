@@ -2,9 +2,7 @@
 Class for running all simulations and plotting results over a grid of SNR and INR values.
 """
 
-import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
 import pandas as pd
 
 # Import custom modules and components
@@ -63,12 +61,13 @@ class AllGridSim:
                 r, r_hat_vamp, r_hat_lin, r_hat_orc = sim.evaluate(load_model=load_model)
 
                 # ==== Compute Metrics ====
-                mse_vamp, nmse_vamp = error_metric(r, r_hat_vamp, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-                mse_lin, nmse_lin = error_metric(r, r_hat_lin, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-                mse_orc, nmse_orc = error_metric(r, r_hat_orc, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-                cap_vamp = corr_cap(r, r_hat_vamp, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-                cap_lin = corr_cap(r, r_hat_lin, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-                cap_orc = corr_cap(r, r_hat_orc, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
+                mask_1d = tf.concat([tf.zeros(sim.des_idx0, dtype=tf.complex64),
+                                     tf.ones(sim.des_idx1 - sim.des_idx0, dtype=tf.complex64),
+                                     tf.zeros(self.nfft - sim.des_idx1, dtype=tf.complex64)], axis=0)
+                mask = tf.broadcast_to(mask_1d, tf.shape(r))
+                cap_vamp, mse_vamp, nmse_vamp = metrics(r, r_hat_vamp, des_known=self.des_known, mask=mask)
+                cap_lin, mse_lin, nmse_lin = metrics(r, r_hat_lin, des_known=self.des_known, mask=mask)
+                cap_orc,mse_orc, nmse_orc = metrics(r, r_hat_orc, des_known=self.des_known, mask=mask)
 
                 print(f"Capacity - VAMP (Known Interferer): {cap_vamp.numpy():.4f}")
                 print(f"Capacity - Linear (Known Interferer): {cap_lin.numpy():.4f}")
@@ -101,11 +100,9 @@ class AllGridSim:
                 r, r_hat_vamp, r_hat_lin, _ = sim.evaluate(load_model=load_model)
 
                 # ==== Compute Metrics ====
-                mse_vamp_unk, nmse_vamp_unk = error_metric(r, r_hat_vamp, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-                mse_lin_unk, nmse_lin_unk = error_metric(r, r_hat_lin, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-                cap_vamp_unk = corr_cap(r, r_hat_vamp, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-                cap_lin_unk = corr_cap(r, r_hat_lin, des_known=self.des_known, des_idx0=sim.des_idx0, des_idx1=sim.des_idx1)
-
+                cap_vamp_unk, mse_vamp_unk, nmse_vamp_unk = metrics(r, r_hat_vamp, des_known=self.des_known, mask=mask)
+                cap_lin_unk, mse_lin_unk, nmse_lin_unk = metrics(r, r_hat_lin, des_known=self.des_known, mask=mask)
+            
                 print(f"Capacity - VAMP (Unknown Interferer): {cap_vamp_unk.numpy():.4f}")
                 print(f"Capacity - Linear (Unknown Interferer): {cap_lin_unk.numpy():.4f}")
 

@@ -89,23 +89,17 @@ def delta_backoff(y_obs: tf.Tensor, b: int = 10, backoff_db: float = 12.0) -> tf
 def metrics(r_true: tf.Tensor,
             r_hat: tf.Tensor,
             des_known: bool = True,
-            des_idx0: Optional[int] = 0,
-            des_idx1: Optional[int] = 512) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
+            mask: Optional[tf.Tensor] = None) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
     
-    nfft = tf.shape(r_true)[1]
     x_true = ufft(r_true)
     x_hat = ufft(r_hat)
 
     if des_known:
         # capacity: subband slice
-        x_true_sub = x_true[:, des_idx0:des_idx1]
-        x_hat_sub = x_hat[:, des_idx0:des_idx1]
+        mask_1d_bool = tf.cast(tf.math.real(mask[0]), tf.bool)
+        x_true_sub = tf.boolean_mask(x_true, mask_1d_bool, axis=1)
+        x_hat_sub = tf.boolean_mask(x_hat, mask_1d_bool, axis=1)
 
-        # mse/nmse: zero-mask + ifft
-        mask_1d = tf.concat([tf.zeros(des_idx0, dtype=tf.complex64),
-                             tf.ones(des_idx1 - des_idx0, dtype=tf.complex64),
-                             tf.zeros(nfft - des_idx1, dtype=tf.complex64)], axis=0)
-        mask = tf.broadcast_to(mask_1d, tf.shape(x_true))
         r_true_filt = uifft(x_true * mask)
         r_hat_filt = uifft(x_hat * mask)
     else:

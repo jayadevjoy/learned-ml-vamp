@@ -14,7 +14,7 @@ from .nonlinear import SatNL, SatLinearEst, SatNeuralEst
 from .source import SpecSource, SpecEstim, SpecNeuralUpdate
 from .lmlvamp import VampSatEst, OracleLinEst
 from .channel_sim import VampSim
-from .metrics import AllGridSim
+from .metrics_sim import AllGridSim
 
 __all__ = [# utilities
            "complex_gaussian",
@@ -23,7 +23,7 @@ __all__ = [# utilities
            "add_awgn",
            "ufft",
            "uifft",
-           "metrics",
+           "metrics_sim",
            "quantizer",
            "delta_backoff",
            # modules

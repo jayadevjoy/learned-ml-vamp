@@ -124,11 +124,13 @@ class VampSatEst(tf.keras.Model):
                 z_0 = ufft(v)
 
                 # Spectral denoising step
-                x_hat, _ = self.spec_est(z_0, gamma_0, S, mu)
+                x_hat, gamma_1 = self.spec_est(z_0, gamma_0, S, mu)
+                alpha = gamma_0 / gamma_1
+                gamma_1 = gamma_0 * (1 - alpha) / alpha
                 r_hat = uifft(x_hat)
 
                 # Message updates
-                beta_0, beta_1, gamma_1 = updater(z_0, gamma_0, S, mu)
+                beta_0, beta_1 = updater(z_0, gamma_0, S, mu)
                 z_1 = beta_0 * r_hat - beta_1 * v
 
                 # Compute loss
@@ -142,10 +144,13 @@ class VampSatEst(tf.keras.Model):
 
                 # Spectral denoising step
                 x_hat, gamma_1 = self.spec_est(z_0, gamma_0, S, mu)
+                alpha = gamma_0 / gamma_1
+                alphac = real_to_complex(alpha)
+                gamma_1 = gamma_0 * (1 - alpha) / alpha
                 r_hat = uifft(x_hat)
 
                 # Message updates
-                beta_0, beta_1 = 1, 0
+                beta_0, beta_1 = (1 / (1 - alphac)), (alphac / (1 - alphac))
                 z_1 = beta_0 * r_hat - beta_1 * v
 
                 # Compute loss

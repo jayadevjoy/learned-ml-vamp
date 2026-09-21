@@ -30,6 +30,7 @@ class VampSim:
                  snr_interval=None, 
                  inr_interval=None,
                  intf_known=True,
+                 neural_update=True,
                  quantize=False):
         """
         Initialize simulation environment and models.
@@ -59,6 +60,7 @@ class VampSim:
         self.nsamp = nsamp
         self.intf_known = intf_known
         self.nitvamp = nitvamp
+        self.neural_update = neural_update
         self.quantize = quantize
 
         if snr_interval is None:
@@ -99,7 +101,7 @@ class VampSim:
         self.spec_est = SpecEstim()
 
         # Instantiate VAMP estimator using the spectral denoiser
-        self.vamp_est = VampSatEst(niter=self.nitvamp, spec_est=self.spec_est, sat_nl=self.sat_nl)
+        self.vamp_est = VampSatEst(niter=self.nitvamp, spec_est=self.spec_est, sat_nl=self.sat_nl, neural_update=self.neural_update)
 
     def train(self, nsteps=500):
         """
@@ -209,7 +211,7 @@ class VampSim:
             Oracle linear estimate output.
         """
         if load_model:
-            self.vamp_est = VampSatEst(niter=self.nitvamp, spec_est=self.spec_est, sat_nl=self.sat_nl)
+            self.vamp_est = VampSatEst(niter=self.nitvamp, spec_est=self.spec_est, sat_nl=self.sat_nl, neural_update=self.neural_update)
             if isinstance(self.vamp_est, VampSatEst):
                 input_shapes = ((self.nfft,), (self.nfft,))
                 self.vamp_est.build(input_shapes)

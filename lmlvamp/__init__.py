@@ -15,6 +15,7 @@ from .source import SpecSource, SpecEstim, SpecNeuralUpdate
 from .vamp import VampSatEst, OracleLinEst
 from .channel_sim import VampSim
 from .metrics_sim import AllGridSim
+from .plotter import Plotter
 
 __all__ = [# utilities
            "complex_gaussian",
@@ -23,7 +24,7 @@ __all__ = [# utilities
            "add_awgn",
            "ufft",
            "uifft",
-           "metrics_sim",
+           "metrics",
            "quantizer",
            "delta_backoff",
            # modules
@@ -36,4 +37,5 @@ __all__ = [# utilities
            "VampSatEst",
            "OracleLinEst",
            "VampSim",
-           "AllGridSim"]
+           "AllGridSim",
+           "Plotter"]

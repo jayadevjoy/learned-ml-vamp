@@ -196,8 +196,8 @@ class SpecNeuralUpdate(tf.keras.Layer):
         self.var_wb = sat_nl.var_wb
         self.Psat = sat_nl.Psat
 
-        # Output size: [beta_0, beta_1, gamma_1]
-        nout = 3
+        # Output size: [beta_0, beta_1]
+        nout = 2
 
         # Define neural network layers
         self.dense1 = tf.keras.layers.Dense(nhid, activation='sigmoid')
@@ -219,7 +219,7 @@ class SpecNeuralUpdate(tf.keras.Layer):
              z_0: tf.Tensor,
              gamma_0: tf.Tensor,
              S: tf.Tensor,
-             mu: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
+             mu: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
         """
         Forward pass through the neural network.
 
@@ -240,8 +240,6 @@ class SpecNeuralUpdate(tf.keras.Layer):
             Updated message coefficient.
         beta_1 : tf.Tensor, shape (nsamp, 1), tf.complex64
             Updated message coefficient.
-        gamma_1 : tf.Tensor, shape (nsamp, 1), tf.float32
-            Updated precision (inverse variance).
         """
         # Get input dimensions
         nsamp, ntd = z_0.shape
@@ -269,12 +267,9 @@ class SpecNeuralUpdate(tf.keras.Layer):
         # Extract outputs: real-valued [beta_0, beta_1, gamma_1]
         beta_0 = real_to_complex(tf.expand_dims(output[:, 0], axis=1))
         beta_1 = real_to_complex(tf.expand_dims(output[:, 1], axis=1))
-        log_r_var_post = tf.expand_dims(output[:, 2], axis=1)
-        rho_0 =  gamma_0 / tf.exp(log_r_var_post)
 
         # Reshape outputs to match expected output dimensions
         beta_0 = tf.reduce_mean(tf.reshape(beta_0, (nsamp, ntd)), axis=1, keepdims=True)
         beta_1 = tf.reduce_mean(tf.reshape(beta_1, (nsamp, ntd)), axis=1, keepdims=True)
-        gamma_1 = 1 / tf.reduce_mean(tf.reshape(1 / rho_0, (nsamp, ntd)), axis=1, keepdims=True)
 
-        return beta_0, beta_1, gamma_1
+        return beta_0, beta_1

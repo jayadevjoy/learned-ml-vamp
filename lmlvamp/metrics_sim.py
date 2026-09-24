@@ -2,6 +2,8 @@
 Class for running all simulations and plotting results over a grid of SNR and INR values.
 """
 
+import os
+import csv
 import tensorflow as tf
 import pandas as pd
 
@@ -37,7 +39,11 @@ class AllGridSim:
         self.results = []
 
 
-    def run_sim(self):
+    def run_sim(self, file_path):
+        write_header = not os.path.exists(file_path)
+        csv_file = open(file_path, "a", newline="")
+        writer = None
+
         for snr in self.snr_list:
             for inr in self.inr_list:
 
@@ -102,16 +108,15 @@ class AllGridSim:
 
                 self.results.append(result_row)
 
+                # Write this row immediately
+                if writer is None:
+                    writer = csv.DictWriter(csv_file, fieldnames=list(result_row.keys()))
+                    if write_header:
+                        writer.writeheader()
+                writer.writerow(result_row)
+                csv_file.flush()
+                os.fsync(csv_file.fileno())
 
-    def save(self, file_path):
-        """
-        Save the simulation results to a CSV file.
-        Args:
-            file_path (str): Path to save the CSV file.
-        """
-        if not self.results:
-            print("No results to save. Run simulations first.")
-            return
-        df = pd.DataFrame(self.results)
-        df.to_csv(file_path, index=False)
-        print(f"Results saved to {file_path}")
+                print(f"Wrote row to {file_path}: SNR={snr}, INR={inr}")
+
+        csv_file.close()

@@ -14,7 +14,8 @@ from .source import SpecSource, SpecEstim
 from .utilities import quantizer, delta_backoff, ufft, uifft
 from .vamp import VampSatEst, OracleLinEst
 
-MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "model")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_DIR = os.path.join(PROJECT_ROOT, "results", "model")
 
 class VampSim:
     """
@@ -107,7 +108,8 @@ class VampSim:
         # Define the path for saving/loading model weights
         self.filepath = os.path.join(MODEL_DIR,
                                     f"vamp_nit{self.nitvamp}_nu{int(self.neural_update)}"
-                                    f"_q{int(self.quantize)}_snr{snr:g}_inr{inr:g}.weights.h5")
+                                    f"_q{int(self.quantize)}_ik{int(self.intf_known)}"
+                                    f"_snr{snr:g}_inr{inr:g}.weights.h5")
 
     def train(self, nsteps=500):
         """

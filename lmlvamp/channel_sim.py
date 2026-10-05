@@ -14,6 +14,7 @@ from .source import SpecSource, SpecEstim
 from .utilities import quantizer, delta_backoff, ufft, uifft
 from .vamp import VampSatEst, OracleLinEst
 
+MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "model")
 
 class VampSim:
     """
@@ -103,6 +104,11 @@ class VampSim:
         # Instantiate VAMP estimator using the spectral denoiser
         self.vamp_est = VampSatEst(niter=self.nitvamp, spec_est=self.spec_est, sat_nl=self.sat_nl, neural_update=self.neural_update)
 
+        # Define the path for saving/loading model weights
+        self.filepath = os.path.join(MODEL_DIR,
+                                    f"vamp_nit{self.nitvamp}_nu{int(self.neural_update)}"
+                                    f"_q{int(self.quantize)}_snr{snr:g}_inr{inr:g}.weights.h5")
+
     def train(self, nsteps=500):
         """
         Train the Learned VAMP estimator using generated data.
@@ -184,11 +190,8 @@ class VampSim:
 
         # Restore best weights
         self.vamp_est.set_weights(best_weights)
+        self.vamp_est.save_weights(self.filepath)
         print("Training complete. Best weights restored.")
-
-        # # Save best weights
-        # filepath = os.path.join(os.getcwd(), 'vamp_est.weights.h5')
-        # self.vamp_est.save_weights(filepath)
 
     def evaluate(self, load_model=True):
         """
@@ -211,16 +214,13 @@ class VampSim:
             Oracle linear estimate output.
         """
         if load_model:
-            self.vamp_est = VampSatEst(niter=self.nitvamp, spec_est=self.spec_est, sat_nl=self.sat_nl, neural_update=self.neural_update)
-            if isinstance(self.vamp_est, VampSatEst):
+            if not os.path.exists(self.filepath):
+                raise FileNotFoundError(f"{self.filepath} not found. Run sim.train() to train model.")
+            if not self.vamp_est.built:
                 input_shapes = ((self.nfft,), (self.nfft,))
                 self.vamp_est.build(input_shapes)
-            filepath = os.path.join(os.getcwd(), 'vamp_est.weights.h5')
-            if os.path.exists(filepath):
-                print("Loading the model...")
-                self.vamp_est.load_weights(filepath)
-            else:
-                raise FileNotFoundError(f"{filepath} not found. Run sim.train() to train model.")
+            print(f"Loading weights from {self.filepath}")
+            self.vamp_est.load_weights(self.filepath)
 
         # Generate new data
         x, r = self.src()
